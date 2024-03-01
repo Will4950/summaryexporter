@@ -6,6 +6,7 @@ export async function POST(req) {
 
 	try {
 		webhook.data = await req.json();
+		webhook.body = JSON.stringify(webhook.data);
 	} catch {
 		return new Response(JSON.stringify({error: 'Invalid JSON'}), {
 			status: 400
@@ -27,6 +28,21 @@ export async function POST(req) {
 
 		return new Response(challengeResponse, {status: 200});
 	}
+
+	if (!req.headers.has('x-zm-request-timestamp'))
+		return new Response(null, {status: 400});
+
+	if (!req.headers.has('x-zm-signature'))
+		return new Response(null, {status: 400});
+
+	const payloadHash = createHmac('sha256', process.env.SECRET)
+		.update(`v0:${req.headers.get('x-zm-request-timestamp')}:${webhook.body}`)
+		.digest('hex');
+
+	const payloadSignature = `v0=${payloadHash}`;
+
+	if (req.headers.get('x-zm-signature') !== payloadSignature)
+		return new Response(null, {status: 400});
 
 	console.log(webhook.data.event);
 	processWebhook(webhook);
